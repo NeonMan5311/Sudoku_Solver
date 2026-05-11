@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Advanced Sudoku Solver (AI)</title>
+<style>
+body { font-family: Arial; text-align:center; background:#f4f4f4; }
+h1 { margin-top:20px; }
+.grid { display:grid; grid-template-columns:repeat(9,45px); gap:2px; justify-content:center; margin:20px auto; }
+input { width:45px; height:45px; text-align:center; font-size:18px; }
+
+/* Remove number input arrows */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+}
+.highlight { background: #ffe066; }
+button { margin:8px; padding:10px 15px; font-size:15px; border:none; border-radius:6px; background:#007bff; color:white; cursor:pointer; }
+button:hover { background:#0056b3; }
+</style>
+</head>
+<body>
+
+<h1>AI Sudoku Solver (MRV + Forward Checking)</h1>
+
+<div class="grid" id="grid"></div>
+
+<button onclick="solveSudoku()">Solve (Visual)</button>
+<button onclick="generateSudoku()">Generate</button>
+<button onclick="clearGrid()">Clear</button>
+
+<p id="stats"></p>
+
+<script>
+const gridEl = document.getElementById("grid");
+let steps = 0, backtracks = 0, delay = 50;
+
+function createGrid() {
+  gridEl.innerHTML = "";
+  for (let i = 0; i < 81; i++) {
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.maxLength = 1;
+    inp.addEventListener("input", () => {
+      inp.value = inp.value.replace(/[^1-9]/g, "");
+    });
+    inp.min = 1; inp.max = 9;
+    gridEl.appendChild(inp);
+  }
+}
+
+function getGrid() {
+  const inputs = document.querySelectorAll("input");
+  let g = [];
+  for (let i=0;i<9;i++){
+    g[i]=[];
+    for(let j=0;j<9;j++){
+      g[i][j]=inputs[i*9+j].value?parseInt(inputs[i*9+j].value):0;
+    }
+  }
+  return g;
+}
+
+function setGrid(g){
+  const inputs=document.querySelectorAll("input");
+  for(let i=0;i<9;i++){
+    for(let j=0;j<9;j++){
+      inputs[i*9+j].value=g[i][j]||"";
+    }
+  }
+}
+
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+function isSafe(grid,r,c,n){
+  for(let i=0;i<9;i++) if(grid[r][i]==n||grid[i][c]==n) return false;
+  let br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+  for(let i=0;i<3;i++) for(let j=0;j<3;j++) if(grid[br+i][bc+j]==n) return false;
+  return true;
+}
+
+function getDomain(grid,r,c){
+  let d=[];
+  for(let n=1;n<=9;n++) if(isSafe(grid,r,c,n)) d.push(n);
+  return d;
+}
+
+function selectMRV(grid){
+  let minLen=10, best=null;
+  for(let r=0;r<9;r++){
+    for(let c=0;c<9;c++){
+      if(grid[r][c]==0){
+        let d=getDomain(grid,r,c);
+        if(d.length<minLen){
+          minLen=d.length;
+          best=[r,c,d];
+        }
+      }
+    }
+  }
+  return best;
+}
+
+async function solveVisual(grid){
+  let choice = selectMRV(grid);
+  if(!choice) return true;
+
+  let [r,c,domain]=choice;
+
+  for(let val of domain){
+    if(isSafe(grid,r,c,val)){
+      grid[r][c]=val;
+      steps++;
+      setGrid(grid);
+      await sleep(delay);
+
+      if(await solveVisual(grid)) return true;
+
+      grid[r][c]=0;
+      backtracks++;
+      setGrid(grid);
+      await sleep(delay);
+    }
+  }
+  return false;
+}
+
+async function solveSudoku(){
+  let grid=getGrid();
+  steps=0; backtracks=0;
+  let start=performance.now();
+
+  let solved = await solveVisual(grid);
+
+  let end=performance.now();
+  document.getElementById("stats").innerText =
+    solved
+    ? `Solved! Time: ${((end-start)/1000).toFixed(2)}s | Steps: ${steps} | Backtracks: ${backtracks}`
+    : "No solution";
+}
+
+function generateSudoku(){
+  let grid=Array.from({length:9},()=>Array(9).fill(0));
+
+  function fill(){
+    for(let i=0;i<81;i++){
+      let r=Math.floor(i/9), c=i%9;
+      if(grid[r][c]==0){
+        let nums=[1,2,3,4,5,6,7,8,9].sort(()=>Math.random()-0.5);
+        for(let n of nums){
+          if(isSafe(grid,r,c,n)){
+            grid[r][c]=n;
+            if(fill()) return true;
+            grid[r][c]=0;
+          }
+        }
+        return false;
+      }
+    }
+    return true;
+  }
+
+  fill();
+
+  let remove=45;
+  while(remove--){
+    let r=Math.floor(Math.random()*9);
+    let c=Math.floor(Math.random()*9);
+    grid[r][c]=0;
+  }
+
+  setGrid(grid);
+}
+
+function clearGrid(){ document.querySelectorAll("input").forEach(i=>i.value=""); }
+
+createGrid();
+</script>
+
+</body>
+</html>
